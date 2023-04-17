@@ -1,0 +1,326 @@
+---
+title: "R Clase 2: Introducción a dplyr"
+author: "Cristian Urbano"
+date: "8/22/2022"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+
+options(max.print = 400)
+```
+
+# Datos
+
+Usemos los datos de gapminder para aplicar las funciones de dplyr. Empezamos por instalar el paquete
+
+```{r ,eval=FALSE}
+install.packages('gapminder') #Recuerde que esto solo se hace una vez
+```
+
+Cargamos la librería
+```{r }
+library(gapminder)
+```
+
+y por último cargamos los datos
+
+```{r }
+data('gapminder')
+gapminder
+
+```
+
+## Inspección
+
+Para inspeccionar los datos podemos usar el paquete inspectdf
+
+```{r ,eval=FALSE}
+install.packages('inspectdf') #Recuerde que esto solo se hace una vez
+```
+
+Cargamos la librería a nuestro espacio de trabajo
+
+```{r }
+library(inspectdf)
+```
+
+inspectdf tiene 3 funciones útiles para darse una idea de los datos que contiene un data frame: inspect_na(), inspect_cat() e inspect_num().
+
+inspect_na() permite ver si hay datos faltantes en el data frame
+
+```{r }
+inspect_na(gapminder)
+```
+No hay datos faltantes en esta base. Excelente!
+
+Ahora usemos inspect_cat() para hacer una descriptiva rápida de las variables categóricas
+
+```{r }
+inspect_cat(gapminder)
+```
+
+Solo encontró 2 variables categóricas (en este punto es bueno revisar si la función está clasificando bien las variables). Podemos ver que el data frame contiene 5 continentes y 142 países.
+
+inspect_num() permite hacer una descriptiva rápida de las variables numéricas.
+
+```{r }
+inspect_num(gapminder)
+```
+
+La función encontró 4 variables numéricas. Aprenderemos a interpretar estos datos luego.
+
+Para nuestro caso, sería bueno saber cuantos años hay en la base de datos. El año, si bien es un número, se trata de una fecha y se le puede sacar más información si la tratamos como categórica.
+
+```{r }
+gapminder$year <- as.character(gapminder$year) #convertimos el año a categórica
+
+inspect_cat(gapminder)
+```
+
+De esta manera, podemos saber que gapminder contiene 3 indicadores de nivel de vida para 142 países en 12 años.
+
+Si queremos adentrarnos más en lso datos, debemos asignar el resultado de la función a un objeto.
+
+```{r }
+var_categoricas <- inspect_cat(gapminder)
+```
+
+Y ahora podemos acceder a las tablas de frecuencias que la función crea en la variable levels
+
+```{r }
+var_categoricas$levels[1] #Para el continente
+```
+
+Inspeccione el resto.
+
+# Introducción a dplyr
+
+## Instalación
+
+Usamos install.packages() para instalar dplyr
+
+```{r ,eval=FALSE}
+
+install.packages('dplyr') #Recuerde que esto solo se hace una vez
+
+```
+
+Cargamos la librería a nuestro espacio de trabajo
+
+```{r }
+library(dplyr)
+```
+
+## Operador pipe
+
+dplyr nos permite usar el operador pipe %>% (Ctrl + Shift + M). El operador pipe encadena funciones.
+
+```{r }
+65 %>% 
+  sqrt() %>% 
+  log() %>% 
+  round(digits = 2)
+```
+
+Es mucho más conveniente que usar la sintaxis tradicional de R. Además, facilita la lectura del código.
+
+```{r }
+#Sintaxis tradicional de R
+round(log(sqrt(65)),2)
+```
+
+Ahora bien, es importante conocer ambas. Hay algunos paquetes que no soportan el uso del pipe.
+
+## Operaciones con filas
+
+### filter()
+
+filter() sirve para filtrar las observaciones del data frame que cumplan la condición escrita. Por ejemplo, si queremos dejar solamente a Colombia, debemos usar el operador de comparación ==
+
+```{r }
+filter(gapminder, country=='Colombia')
+```
+
+La comparación de igualdad irá fila por fila chequeando si la variable country es igual a Colombia. Si es cierto pondrá TRUE, si no es cierto pondrá FALSE.
+
+```{r }
+gapminder$country=='Colombia'
+```
+
+filter() deja solo las observaciones para las cuales el resultado es TRUE.
+
+Si queremos dejar 2 países, podemos usar el 'o lógico' |
+
+```{r }
+filter(gapminder, 
+       country=='Colombia' | country=='Argentina')
+```
+
+De nuevo la condición irá chequeando para cada fila si la variable country es igual a Colombia o a Argentina, y devuelve TRUE o FALSE.
+
+Para lograr este mismo resultado podríamos usar el operador %in%. Este chequea para cada fila si la variable contiene alguna de los países que estan en el vector.
+
+```{r }
+filter(gapminder, 
+       country %in% c('Colombia', 'Argentina'))
+```
+
+Lo bueno de esta forma de escribirlo es que no hay que repetir la variable cada vez que queramos incluir un nuevo país.
+
+```{r }
+filter(gapminder, 
+       country %in% c('Colombia', 'Argentina', 'Chile'))
+```
+
+Finalmente, podemos usar el operador pipe para encadenar varios filtros. Por ejemplo, si me quiero quedar con esos 3 países y solo con el año 2007
+
+```{r }
+gapminder %>% 
+  filter(country %in% c('Colombia', 'Argentina', 'Chile')) %>% 
+  filter(year=='2007')
+```
+
+#### Actividad
+
+Ahora hágalo usted. Filtre los países del continente europeo para los años mayores a 1990.
+
+### group_by()
+
+Esta función nos permite crear grupos homogeneos en una variable como característica del data frame. No cambia el contenido del data frame.
+
+```{r }
+gapminder %>% 
+  group_by(continent)
+```
+Observe que no hubo cambios al data frame como tal. Lo único adicional es que sale es groups: continent[5]. Esto nos indica que la operación fue exitosa y creó 5 grupos con la variable continente.
+
+Es posible añadir más variables para agrupar.
+
+```{r }
+gapminder %>% 
+  group_by(continent, year)
+```
+En estos casos, trata cada combinación de contiente y año como un grupo separado.
+
+Estos grupos nos servirán para hacer operaciones con otras funciones.
+
+### summarise()
+
+Esta función permite crear nuevas variables con operaciones sobre las ya existentes. Como dice su nombre traducido, resume los datos, es decir que va a cambiar nuestro data frame de tamaño y nos devuelve solo las variables que creemos.
+
+```{r }
+gapminder %>% 
+  summarise(media_lifeExp = mean(lifeExp))
+```
+
+Lo interesante de summarise() es que tiene en cuenta los grupos creados por group_by(). Creemos grupos por contiente
+
+```{r }
+gapminder %>% 
+  group_by(continent) %>% 
+  summarise(media_lifeExp = mean(lifeExp))
+```
+En este caso, resume al nivel de grupo. Esto es conveniente para calcular todo tipo de estadísticas descriptivas para cada grupo.
+
+```{r }
+gapminder %>% 
+  group_by(continent) %>% 
+  summarise(media_lifeExp = mean(lifeExp),
+            sd_lifeExp = sd(lifeExp),
+            media_gdp = mean(gdpPercap))
+
+```
+
+### Actividad
+
+Cuente la cantidad de países (observaciones) por continente para el año 2007. Pista: n() es una función que cuenta el número de filas.
+
+## Operaciones con columnas
+
+### select()
+
+Permite seleccionar (dejar) solamente las variables indicadas. Se pueden indicar tantas como se quiera
+
+```{r }
+gapminder %>% 
+  select(country,year,lifeExp)
+
+```
+
+Para ver los nombres de las variables del data frame conviene mirar colnames()
+
+```{r }
+colnames(gapminder)
+```
+
+Además, select() permite usar 'selection helpers' o asistentes de selección. Algunos son:
+
+* everything(): Selecciona todas las variables
+
+* last_col(): Selecciona la última variable
+
+* starts_with(): Selecciona las variables que empiecen con el character indicado
+
+* ends_with(): Selecciona las variables que terminen con el character indicado
+
+* contains(): Selecciona las variables que contienen el character indicado
+
+Son útiles cuando hay bases de datos que guardan alguna información como columnas. Por ejemplo, si gapminder estuviera así
+
+```{r , include =FALSE}
+library(tidyr)
+gapminder2 <- pivot_longer(gapminder, cols = c('lifeExp','gdpPercap','pop'))
+gapminder2 <- pivot_wider(gapminder2, id_cols = c('continent','country'), 
+                          names_from = c('name','year'), values_from = 'value')
+
+```
+
+```{r }
+gapminder2
+```
+
+Podríamos seleccionar solo la expectativa de vida usando starts_with('lifeExp')
+
+```{r }
+gapminder %>% 
+  select(continent,country,starts_with('lifeExp'))
+```
+
+### mutate()
+
+Permite crear nuevas variables. No modifica el tamaño del data frame.
+
+Estas nuevas variables pueden ser introducir al data frame una columna solo con un character.
+
+```{r }
+gapminder %>% 
+  mutate(nueva_var = 'País')
+```
+
+O hacer un cálculo sobre variables ya existentes
+
+```{r }
+gapminder %>% 
+  mutate(gdp = gdpPercap*pop)
+```
+
+### Actividad
+
+A partir de la tabla que generó en la actividad anterior, genere una nueva variable con el porcentaje que representa cada continente del total. Pista: use sum() para tener el total.
+
+
+
+
+
+
+
+
+

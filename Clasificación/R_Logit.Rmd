@@ -1,0 +1,269 @@
+---
+title: "R: Clasificación con modelos Logit"
+author: "Cristian Urbano"
+date: ""
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
+
+options(max.print = 100)
+```
+
+# Librerías y Datos
+
+Primero instalamos los paquetes necesarios para hacer una regresión logística.
+
+```{r ,eval=FALSE}
+install.packages('ISLR','rms','margins','InformationValue') #Recuerde que esto solo se hace una vez
+```
+
+```{r }
+
+library(ISLR)
+library(dplyr)
+library(rms)
+library(margins)
+library(InformationValue)
+library(inspectdf)
+
+options(scipen = 9999) #Para quitar la notación científica
+
+datos <- Default
+
+head(datos, 10)
+
+#Inspeccionamos la base de datos
+inspeccion_na <- inspect_na(datos)
+inspeccion_na
+
+#Generemos una columna ID
+datos$id = c(1:nrow(datos))
+
+#Cambiar la variable para que quede 0 y 1
+
+datos$default_b <- recode(datos$default, 'Yes'=1, 'No'=0)
+
+```
+
+Miremos la variable de respuesta
+
+```{r }
+
+table(datos$default_b)
+
+```
+
+Tenemos 333 personas que dejaron de pagar su deuda (cayeron en default).
+
+# Análisis de clasificación
+
+## División de la muestra
+
+```{r }
+#Dividir train y test
+#Usar 70% del dataset para entrenamiento, el resto para evaluación
+
+set.seed(1) #Poner la semilla para el generador de números aleatorios
+
+train <- datos %>% sample_frac(0.70) #Dejar el 70% de los datos en el dataframe de entrenamiento
+test  <- anti_join(datos, train, by = 'id') #El resto queda en el de test
+```
+
+## Modelo
+
+Corremos el modelo usando la función glm()
+
+```{r }
+
+#Regresión logística
+modelo <- glm(default_b ~ student + balance , 
+              family= binomial(link = 'logit'), data=train)
+
+summary(modelo)
+
+```
+
+Observe que la tabla de resultados es muy parecida a una regresión lineal. Pero no se deje confundir, los betas nos tienen interpretación.
+
+Probemos otros modelos, por ejemplo incluyendo todas las variables
+
+```{r }
+
+modelo2 <- lrm(default_b ~ student + balance + income, data=train)
+print(modelo2)
+
+```
+
+Observe que los betas de student y el balance salen significativos, el de income no.
+
+Mire lo que sucede si hacemos un modelo solo con income
+
+```{r }
+modelo3 <- lrm(default_b ~ income , data=train)
+print(modelo3)
+```
+
+Observe que es un mal modelo. Mire el pseudo R2.
+
+Nos quedamos con el primer modelo que hicimos. Es importante hacer este paso de exploración de distintos modelos.
+
+## Interpretación
+
+Calculamos los efectos marginales promedio
+
+```{r }
+
+efectos_marginales <- marginal_effects(modelo)
+
+train_mfx <- cbind(train, efectos_marginales) #Unimos los efectos a la base de entrenamiento
+
+train_mfx %>% 
+  dplyr::summarize(media_mfx_balance = mean(dydx_balance),
+            media_mfx_studentYes = mean(dydx_studentYes))
+
+```
+
+Observe que en promedio ser estudiante dimsinuye la probabilidad de caer en default. Un mayor balance de la deuda aumenta la probabilidad de default.
+
+Una manera de visualizar los resultados es hacer un gráfico de puntos:
+
+```{r }
+
+ggplot(train_mfx, aes(y=dydx_balance, x=balance)) +
+  geom_point() +
+  theme_minimal()
+
+```
+
+Aquí podemos observar la no linealidad de los efectos. Recuerde que esto es un ejercicio con todas las demás variables constantes.
+
+
+## Evaluación
+
+
+### Muestra de entrenamiento
+
+Para evaluar necesitamos primero predecir las probabilidades 
+
+```{r }
+
+#Predecir la probabilidad de default
+train_pred <-  data.frame('prob_default'=predict(modelo, type="response"))
+train_pred <- cbind(train,train_pred) #unir la predicción a los datos originales
+
+head(train_pred, 5)
+
+```
+
+Observe que hemos calculado la probabilidad de cada individuo (última columna).
+
+Ahora podemos calcular las métricas
+
+```{r }
+
+#Calcular métricas en el área de entrenamiento
+cm_train <- confusionMatrix(train_pred$default_b, train_pred$prob_default)
+cm_train 
+
+accuracy_train <- (cm_train[1,1] + cm_train[2,2]) / nrow(train_pred)
+sensibilidad_train <- sensitivity(train_pred$default_b, train_pred$prob_default)
+especificidad_train <- specificity(train_pred$default_b, train_pred$prob_default)
+
+cat(paste0("Accuracy: ", round(accuracy_train*100,1),
+      "\nSensibilidad: ", round(sensibilidad_train*100,1),
+      "\nEspecificidad: ", round(especificidad_train*100,1)))
+
+plotROC(train_pred$default_b, train_pred$prob_default)
+
+```
+
+En general las métricas indican que el modelo está bien. Aunque no predice muy bien la categoría de interés, es decir que no puede clasificar correctamente a los que dejarán de pagar su deuda.
+
+### Muestra de evaluación
+
+```{r }
+
+#Predecir la probabilidad de default
+test_pred <-  data.frame('prob_default'=predict(modelo, test ,type="response"))
+test_pred <- cbind(test,test_pred)
+
+#Calcular métricas en el área de evaluación
+cm_test <- confusionMatrix(test_pred$default_b, test_pred$prob_default)
+cm_test
+
+accuracy_test <- (cm_test[1,1] + cm_test[2,2]) / nrow(train_pred)
+sensibilidad_test <- sensitivity(test_pred$default_b, test_pred$prob_default)
+especificidad_test <- specificity(test_pred$default_b, test_pred$prob_default)
+
+cat(paste0("Accuracy: ", round(accuracy_train*100,1),
+      "\nSensibilidad: ", round(sensibilidad_train*100,1),
+      "\nEspecificidad: ", round(especificidad_train*100,1)))
+
+plotROC(test_pred$default_b, test_pred$prob_default)
+
+```
+
+En el área de evaluación observamos métricas parecidas, nuestro modelo es estable!
+
+Además, la curva ROC nos sugiere que podemos jugar con el punto de corte para mejorar los resultados.
+
+## Punto de corte
+
+Como vimos antes, el modelo no predice muy bien a los clientes que dejarán de pagar su deuda. Veamos como se comporta nuestra predicción con respecto a la realidad.
+
+```{r }
+ggplot(train_pred, aes(x=prob_default, fill=default, color=default)) +
+  geom_density(alpha=0.3) +
+  labs(x='Probabilidad de default estimada', y='Densidad', color='Real', fill='Real') +
+  theme_minimal()
+```
+
+Con el análisis gráfico podemos ver que bajar el punto de corte puede ayudar a aumentar la sensibilidad, a costa de sacrificar poder de predicción  para los que si pagarán (especificidad).
+
+El punto de corte se puede cambiar desde las funciones confusionMatrix, sensitivity y specificity. Probemos a hacerlo en el área de entrenamiento. El argumento para cambiarlo es threshold.
+
+```{r }
+
+cm_train <- confusionMatrix(train_pred$default_b, train_pred$prob_default, threshold = 0.15)
+cm_train 
+
+accuracy_train <- (cm_train[1,1] + cm_train[2,2]) / nrow(train_pred)
+sensibilidad_train <- sensitivity(train_pred$default_b, train_pred$prob_default, threshold = 0.15)
+especificidad_train <- specificity(train_pred$default_b, train_pred$prob_default, threshold = 0.15)
+
+cat(paste0("Accuracy: ", round(accuracy_train*100,1),
+      "\nSensibilidad: ", round(sensibilidad_train*100,1),
+      "\nEspecificidad: ", round(especificidad_train*100,1)))
+
+```
+
+Por ejemplo, acá cambiamos el punto de corte a 0.15. Observe que la sensibilidad ha mejorado mucho a costa de perder solo un poco de especificidad. Este modelo parece ser mejor para tomar decisiones!
+
+Veamos como se comporta sobre el área de evaluación
+
+```{r }
+
+#Calcular métricas en el área de evaluación
+cm_test <- confusionMatrix(test_pred$default_b, test_pred$prob_default, threshold = 0.15)
+cm_test
+
+accuracy_test <- (cm_test[1,1] + cm_test[2,2]) / nrow(train_pred)
+sensibilidad_test <- sensitivity(test_pred$default_b, test_pred$prob_default, threshold = 0.15)
+especificidad_test <- specificity(test_pred$default_b, test_pred$prob_default, threshold = 0.15)
+
+cat(paste0("Accuracy: ", round(accuracy_train*100,1),
+      "\nSensibilidad: ", round(sensibilidad_train*100,1),
+      "\nEspecificidad: ", round(especificidad_train*100,1)))
+
+```
+
+Las métricas son similares. Así que hemos mejorado el modelo solo modificando el punto de corte, y sigue siendo estable!
+

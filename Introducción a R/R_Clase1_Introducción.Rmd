@@ -1,0 +1,317 @@
+---
+title: "R Clase 1: Introducción"
+author: "Cristian Urbano"
+date: "8/22/2022"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+```
+
+```{r , inlcude=FALSE, echo=FALSE}
+
+#install.packages('dplyr')
+#install.packages(c('ggplot2','readxl'))
+
+```
+
+# Introducción a R
+
+## Asignación
+Se usa el símbolo <- para asignar contenido a un objeto. 
+
+```{r }
+#Asignación de objetos
+x <- 4
+x
+
+
+y <- 5
+y
+
+```
+
+Los nombres de los objetos distinguen entre mayúsculas y minúsculas. Si intentamos traer X (mayúscula) no sabe a que nos referimos.
+```{r }
+try(X)
+```
+
+## Clase
+```{r }
+#Función para mirar la clase de un objeto
+class(x)
+```
+
+## Operaciones aritméticas
+```{r }
+x + y
+x - y
+x*y
+x/y
+
+```
+
+## Operadores de comparación
+```{r }
+#Operadores de comparación
+x > y
+x >= y
+x == y
+x != y
+
+```
+
+## Conversiones entre tipos de objetos
+```{r }
+#Convertir un numeric a character
+x_s <- as.character(x)
+class(x_s) #Note que cambia la clase del objeto
+
+```
+## Objetos tipo character
+
+Se especifican con '' o ""
+
+```{r }
+x2 <- 'a'
+class(x2)
+
+x3 <- "a"
+class(x3)
+```
+
+## Objetos tipo logical
+
+```{r }
+#Objetos tipo logical
+a <- TRUE
+b <- FALSE
+
+#Operadores lógicos
+a & b
+a | b
+
+```
+
+Para usarlos es útil conocer los resultados de las tablas de verdad
+
+```{r }
+#Tablas de verdad (las usaremos más delante para filtrar)
+TRUE & TRUE
+TRUE & FALSE
+FALSE & TRUE
+FALSE & FALSE
+
+TRUE | TRUE
+TRUE | FALSE
+FALSE | TRUE
+FALSE | FALSE
+
+```
+
+## Vectores
+
+```{r }
+#Objetos tipo vector
+vector_1 <- c(10,20,30,40)
+vector_1
+vector_1[1] #Se puede acceder cada elemento del vector usando []
+
+```
+
+```{r }
+#Los vectores también pueden contener characters
+niveles <- c('Muy satisfecho','Satisfecho',
+  'Insatisfecho','Muy insatisfecho')
+niveles[4]
+
+```
+
+### Funciones que crean vectores
+
+```{r }
+#Hay funciones que crean vectores
+#Se puede consultar la ayuda de la función con F1 (Fn+F1 en algunas laptops)
+vector_2 <- seq(from = 1, to = 100, by = 5) 
+seq(1, 100, 5) #Se puede omitir especificar los argumentos si se sigue el orden (Mire la ayuda)
+
+```
+
+```{r }
+#El operador : hace una secuencia con pasos de 1
+1:20
+seq(1,20,1) #Equivalente al anterior
+
+```
+
+```{r }
+#Función rep() sirve para repetir varias veces un vector, consulte la ayuda
+vector_3 <- rep(1:5,5)
+vector_3
+
+#Función length devuelve el largo del vector, es decir cuantas posiciones tiene
+length(vector_3)
+
+
+```
+
+## Instalación de paquetes
+
+Los paquetes son conjuntos de funciones que son desarrollados por la comunidad de R.
+
+```{r }
+#Esta función nos deja ver los que ya tenemos instalados. Acá quiero ver los 10 primeros
+installed.packages()[1:10]
+```
+
+```{r ,eval=FALSE}
+#Esta función nos deja instalar paquetes
+install.packages('dplyr') #Se puede poner uno
+install.packages(c('ggplot2','readxl')) #O varios
+
+```
+
+install.packages() copia los archivos a nuestro computador, pero para cargarlos a nuestro ambiente de trabajo debemos usar library()
+
+```{r , eval=FALSE}
+library(dplyr)
+```
+
+La instalación se hace una sola vez, pero la librería se debe cargar cada vez que iniciemos R
+
+## Working directory
+
+El working directory es la carpeta en la que estamos trabajando. Allí R busca los archivos para leer y guarda nuestro trabajo. Debe traer la dirección completa de su barra de direcciones. En Windows recuerde cambiar los '\\' por '/'
+
+```{r }
+#setwd() permite definir el directorio
+setwd('C:/Users/cristian.urbano/OneDrive - Accenture/Icesi/Clase estadistica/Ejercicios/01 Introduccion')
+
+#getwd() nos muestra cual tenemos definido
+getwd()
+
+```
+
+# Carga de archivos
+
+Revise la ayuda de read.table() con F1 o con la función help()
+
+```{r ,eval=FALSE}
+help(read.table)
+```
+
+La copio aquí acortada
+
+```{r ,eval=FALSE}
+Description
+Reads a file in table format and creates a data frame from it, with cases corresponding to lines and variables to fields in the file.
+
+Usage
+read.table(file, header = FALSE, sep = "", quote = "\"'",
+           dec = ".", numerals = c("allow.loss", "warn.loss", "no.loss"),
+           row.names, col.names, as.is = !stringsAsFactors,
+           na.strings = "NA", colClasses = NA, nrows = -1,
+           skip = 0, check.names = TRUE, fill = !blank.lines.skip,
+           strip.white = FALSE, blank.lines.skip = TRUE,
+           comment.char = "#",
+           allowEscapes = FALSE, flush = FALSE,
+           stringsAsFactors = FALSE,
+           fileEncoding = "", encoding = "unknown", text, skipNul = FALSE)
+
+read.csv(file, header = TRUE, sep = ",", quote = "\"",
+         dec = ".", fill = TRUE, comment.char = "", ...)
+
+read.csv2(file, header = TRUE, sep = ";", quote = "\"",
+          dec = ",", fill = TRUE, comment.char = "", ...)
+
+Arguments
+
+file	
+the name of the file which the data are to be read from.
+
+header	
+a logical value indicating whether the file contains the names of the variables as its first line.
+
+sep	
+the field separator character. Values on each line of the file are separated by this character.
+```
+
+De allí podemos saber que 'header' le dice a R si el archivo tiene nombres de variables en la primera fila y 'sep' le indica a R cual es el separador de los datos. Leamos NetflixOriginals.csv.
+
+```{r }
+#Forma correcta
+datos_nf <- read.table('NetflixOriginals.csv', header= TRUE, sep= ',')
+head(datos_nf,5)
+
+datos_nf_2 <- read.csv('NetflixOriginals.csv')
+head(datos_nf_2,5)
+
+```
+
+Observe que ambas son equivalentes. Esto sucede porque read.csv() no es más que read.table() con distintas opciones predeterminadas
+
+¿Que pasa si leemos mal el archivo?
+
+```{r }
+#Forma incorrecta. Observe que las variables salen todas en una columna
+datos_mal <- read.csv2('NetflixOriginals.csv')
+head(datos_mal,5)
+```
+
+Ahora miremos la clase de los datos
+
+```{r }
+class(datos_nf)
+```
+
+Es un data.frame. Recuerde que un data frame está compuesto de vectores. Podemos acceder a cada variable usando el símbolo $
+
+```{r }
+datos_nf$Title[1:5] #Los corchetes son para acceder solo algunas de las observaciones
+datos_nf$Genre[1:5]
+```
+
+Esto nos permite ejecutar funciones solo sobre una columna. Por ejemplo podemos sacar la media de la duración del filme
+
+```{r }
+mean(datos_nf$Runtime)
+```
+O sacar las frecuencias de una variable categórica
+```{r }
+table(datos_nf$Language)
+```
+
+## Lectura de archivos Excel
+
+Usamos la función read_excel() del paquete readxl.
+
+```{r }
+#Carga en Excel
+
+library(readxl) #Librería que nos permite usar la función read_excel()
+
+datos_nf_xl <- read_excel('NetflixOriginals.xlsx', sheet = 1)
+head(datos_nf_xl,5)
+
+```
+
+
+## Guardado de objetos
+
+save() permite guardar objetos de R. Puede ser uno o varios. Cuando queramos volver a traerlos usamos load()
+
+```{r }
+#Guardar objetos
+save(datos_nf_xl, file='data_netflix.RData')
+
+#Cargar objetos
+load('data_netflix.RData')
+
+```

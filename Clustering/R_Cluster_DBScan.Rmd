@@ -1,0 +1,151 @@
+---
+title: "R: Clustering con DBScan y detección de anomalías"
+author: "Cristian Urbano"
+date: ""
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
+
+options(max.print = 100)
+```
+
+# Librerías y Datos
+
+Primero instalamos los paquetes necesarios para hacer el clustering DBScan.
+
+```{r ,eval=FALSE}
+install.packages('fpc') #Recuerde que esto solo se hace una vez
+```
+
+```{r }
+
+library(dplyr)
+library(inspectdf)
+library(ggpubr)
+library(cluster)
+library(factoextra)
+library(fpc)
+
+options(scipen = 9999) #Para quitar la notación científica
+
+set.seed(1234) #Semilla para generar números aleatorios. Hace reproducibles los resultados.
+
+#Cargamos los datos
+datos_original <- read.csv('Mall_Customers.csv')
+head(datos_original, 3)
+
+```
+
+Esta base de datos contiene 200 clientes de un centro comercial. Note que tenemos 3 variables numéricas y una categórica. Con k-means no podremos usar la categórica. Seleccionamos solo las necesarias e inspeccionamos los datos
+
+```{r }
+
+datos <- select(datos_original, -CustomerID, -Gender) #el menos antes de la variable significa eliminar
+
+#Inspeccionamos los datos nulos
+inspeccion_na <- inspect_na(datos)
+inspeccion_na 
+
+```
+
+Vemos que no tenemos datos faltantes.
+
+# Clustering con DBScan
+
+A diferencia de k-means y otros métodos similares, DBScan no necesita definir el k antes de correrlo. El algoritmo determina el número de grupos automáticamente basado en 2 argumentos:
+
+* Distancia de alcanzabilidad (eps): Es el radio de la vecindad del punto
+* Mínimo número de puntos (MinPts): El mínimo número de puntos dentro de la vecindad que hacen al punto un core point (un punto adentro del clúster)
+
+![](DBScan_Pic.png)
+
+## Estandarización y distancias
+
+Estandarizamos las variables numéricas y calculamos las distancias (euclidianas en este caso, pero podría ser otra).
+
+```{r }
+
+#Estandarizar todas las variables numéricas
+datos_estandarizados <- scale(datos)
+
+#Calculamos la amtriz de distancias
+matriz_distancias <- dist(datos_estandarizados)^2
+
+```
+
+Este paso es importante, el método DBScan se ve afectado por las diferencias en escalas de las variables.
+
+## Correr DBScan
+
+```{r }
+
+modelo_dbscan <- dbscan(matriz_distancias, eps=0.45, MinPts=5, method='dist')
+
+#Calculamos la silueta 
+sil_dbscan <- silhouette(modelo_dbscan$cluster, matriz_distancias)
+
+#Graficamos
+graf_silueta_dbscan = fviz_silhouette(sil_dbscan)
+graf_cluster_dbscan = fviz_cluster(modelo_dbscan, data=datos_estandarizados, geom = c('point')) #Si no elijo variables, usa un PCA
+
+#Juntamos los gráficos
+ggarrange(graf_silueta_dbscan,graf_cluster_dbscan, nrow=1) 
+
+```
+
+Note que el ruido tiene una silueta muy mala, esto es porque no se parecen a ningún grupo. Dejando de lado el ruido, el resto de clusters están bien en términos de la silueta.
+
+Podemos correr otro DBScan con un mayor radio si queremos limitar el ruido.
+
+
+```{r }
+
+modelo_dbscan2 <- dbscan(matriz_distancias, eps=0.55, MinPts=5, method='dist')
+
+#Calculamos la silueta 
+sil_dbscan2 <- silhouette(modelo_dbscan2$cluster, matriz_distancias)
+
+#Graficamos
+graf_silueta_dbscan2 = fviz_silhouette(sil_dbscan2)
+graf_cluster_dbscan2 = fviz_cluster(modelo_dbscan2, data=datos_estandarizados, geom = c('point')) #Si no elijo variables, usa un PCA
+
+#Juntamos los gráficos
+ggarrange(graf_silueta_dbscan2,graf_cluster_dbscan2, nrow=1) 
+
+```
+
+Note que acá las anomalía son mucho más claras. Es importante jugar con los parámetros dependiendo del resultado que busquemos.
+
+Para el ejercicio seguiremos con este último.
+
+## Anomalías
+
+Las anomalías quedan con el cluster 0. Podemos filtrar solo esos datos para investigar su origen.
+
+Primero traemos los clusters asignados por el DBScan a la base original.
+
+```{r }
+
+datos_original$cluster <- as.character(modelo_dbscan2$cluster)
+```
+
+Y procedemos a dejar en la base de datos solo los del cluster 0.
+
+```{r }
+
+anomalias <- datos_original %>% filter(cluster=='0')
+anomalias
+```
+
+Ya con esta base de datos, será tarea de un analista revisar manualmente cada observación para determinar su verdadera naturaleza (si son correctos o son observaciones fraudulentas, por ejemplo).
+
+
+

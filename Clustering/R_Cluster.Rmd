@@ -1,0 +1,254 @@
+---
+title: "R: Clustering con k-means"
+author: "Cristian Urbano"
+date: ""
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
+
+options(max.print = 100)
+```
+
+# Librerías y Datos
+
+Primero instalamos los paquetes necesarios para hacer el clustering con k-means y evaluar.
+
+```{r ,eval=FALSE}
+install.packages('factoextra','cluster') #Recuerde que esto solo se hace una vez
+```
+
+```{r }
+
+library(dplyr)
+library(inspectdf)
+library(ggpubr)
+library(factoextra)
+library(cluster)
+
+options(scipen = 9999) #Para quitar la notación científica
+
+set.seed(1234) #Semilla para generar números aleatorios. Hace reproducibles los resultados.
+
+#Cargamos los datos
+datos <- read.csv('Mall_Customers.csv')
+head(datos, 3)
+
+```
+
+Esta base de datos contiene 200 clientes de un centro comercial. Note que tenemos 3 variables numéricas y una categórica. Con k-means no podremos usar la categórica. Seleccionamos solo las necesarias e inspeccionamos los datos
+
+```{r }
+
+datos <- select(datos, -CustomerID, -Gender) #el menos antes de la variable significa eliminar
+
+#Inspeccionamos los datos nulos
+inspeccion_na <- inspect_na(datos)
+inspeccion_na 
+
+```
+
+Vemos que no tenemos datos faltantes.
+
+# Clustering con k-means
+
+## Estandarización
+
+Estandarizamos las variables numéricas
+
+```{r }
+
+#Estandarizar todas las variables numéricas
+datos_estandarizados <- scale(datos)
+
+```
+
+Este paso es importante, el método de k-means se ve afectado por las diferencias en escalas de las variables.
+
+## Método del codo
+
+La función fviz_nbclust del paquete factoextra nos permite graficar los datos necesarios para decidir k con el método del codo.
+
+### WSS
+
+Primero corremos con la medida de la distancia contra cada cluster al cuadrado
+
+```{r }
+
+fviz_nbclust(datos_estandarizados, FUNcluster=kmeans, method = "wss")
+#wss le indica usae como medida la distancia al cuadrado
+
+```
+
+Según el método del codo, elegiremos el número de clusters en el que las ganancias empiezan a ser bajas. Acá vemos que 6 clusters sería lo sugerido.
+
+### Silueta promedio
+
+Podemos cambiar la métrica a la silueta promedio (recuerde que esta entre mayor es mejor)
+
+```{r }
+
+fviz_nbclust(datos_estandarizados, FUNcluster=kmeans, method = "silhouette")
+#wss le indica usae como medida la distancia al cuadrado
+
+```
+
+Esta medida nos diría que usemos entre 4 y 6 clusters. No usaría 8 porque la ganancia es muy baja.
+
+## Gráfico de silueta
+
+Valoremos 4 y 6 clusters con el gráfico de silueta. Así podremos ver mayor detalle.
+
+```{r }
+modelo_k4 <- kmeans(datos_estandarizados, centers=4)
+sil_k4 <- silhouette(modelo_k4$cluster, dist(datos_estandarizados)^2)
+
+graf_silueta_k4 = fviz_silhouette(sil_k4)
+graf_cluster_k4 = fviz_cluster(modelo_k4, data=datos_estandarizados, geom = c('point')) #Si no elijo variables, usa un PCA
+
+ggarrange(graf_silueta_k4,graf_cluster_k4, nrow=1) 
+
+```
+
+```{r }
+modelo_k6 <- kmeans(datos_estandarizados, centers=6)
+sil_k6 <- silhouette(modelo_k6$cluster, dist(datos_estandarizados)^2)
+
+graf_silueta_k6 = fviz_silhouette(sil_k6)
+graf_cluster_k6 = fviz_cluster(modelo_k6, data=datos_estandarizados, geom = c('point')) #Si no elijo variables, usa un PCA
+
+ggarrange(graf_silueta_k6,graf_cluster_k6, nrow=1)
+
+```
+
+Podemos notar que con 4 clusters los grupos tienen un buen comportamiento de la silueta. Nos quedaremos entonces con k=4.
+
+Nota: Si no se escogen variables, la visualización del clustering hace un PCA para mostrar el resultado. El análisis de componentes principales (PCA) ayuda a reducir las variables incluídas aplicando una transformación matemática. En resumen, está encontrando las dimensiones que mantienen la mayor cantidad de información de las variables originales.
+
+## Resultado
+
+En este gráfico podemos ver el resultado final de nuestro clustering.
+
+```{r }
+graf_cluster_k4
+```
+
+Note que podemos usar las variables que queramos para graficar el resultado. Pero recuerde que estaremos omitiendo información en el gráfico (la otra variable), hay que interpretar con cuidado.
+
+```{r }
+fviz_cluster(modelo_k4, data=datos_estandarizados, 
+             geom = c('point'), choose.vars=c('Age','Annual.Income..k..'))
+```
+```{r }
+fviz_cluster(modelo_k4, data=datos_estandarizados,
+             geom = c('point'), choose.vars=c('Age','Spending.Score..1.100.'))
+```
+
+Ahora podemos empezar a caracterizar los grupos.
+
+## Caracterización
+
+Primero traemos los clusters asignados por el k-means a la base original.
+
+```{r }
+datos$cluster <- as.character(modelo_k4$cluster)
+
+```
+
+Y procedemos a hacer gráficos que nos permitan ver las diferencias entre los grupos. Para las numéricas se recomienda usar boxplots.
+
+### Edad
+
+```{r }
+ggplot(datos, aes(x=cluster, y=Age)) +
+  geom_boxplot() +
+  theme_minimal()
+```
+
+Acá podemos ver que el cluster 3 es el que tiene a los clientes más jovenes, mientras que el cluster 2 tiene a los de más edad. Este gráfico ya nos muestra que los clusters están bien separados por las edades.
+
+### Ingreso anual
+
+```{r }
+ggplot(datos, aes(x=cluster, y=Annual.Income..k..)) +
+  geom_boxplot() +
+  theme_minimal()
+```
+
+En cuanto al ingreso anual, podemos ver que los clusters 1 y 4 son muy similares, con ingresos altos. Además, el 2 y el 3 también se parecen entre ellos, con ingresos más bajos.
+
+Observe que juntando esto con lo que vimos en la edad podríamos decir por ahora que nuestros grupos tienen estas características:
+
+* Cluster 1: Alto ingreso, adultos
+* Cluster 2: Bajo ingreso, adultos y edad más avanzada
+* Cluster 3: Bajo ingreso, jovenes
+* Cluster 4: Alto ingreso, adultos jóvenes
+
+### Score de gasto
+
+```{r }
+ggplot(datos, aes(x=cluster, y=Spending.Score..1.100.)) +
+  geom_boxplot() +
+  theme_minimal()
+```
+
+Vemos que el score de gasto va subiendo en cada cluster, siendo el cluster 1 el más bajo y el cluster 4 el más alto.
+
+Juntamos esto con lo que ya sabemos y obtenemos:
+
+* Cluster 1: Alto ingreso, gasto bajo, adultos
+* Cluster 2: Bajo ingreso, gasto medio, adultos y edad más avanzada
+* Cluster 3: Bajo ingreso, gasto alto, jovenes
+* Cluster 4: Alto ingreso, gasto muy alto, adultos jóvenes
+
+### Definición de etiquetas
+
+Con esta información podemos inventarnos una etiqueta apropiada para estos clusters de clientes.
+
+* Cluster 1: Clientes adultos de bajo valor
+* Cluster 2: Clientes adultos de medio valor
+* Cluster 3: Clientes jóvenes de medio valor
+* Cluster 4: Clientes adultos jóvenes de alto valor
+
+**Reflexione:** ¿Está de acuerdo con las etiquetas definidas para los clusters?
+
+Note que estos nombres pueden entenderse mal, la palabra valor se refiere al potencial de compra en el centro comercial, pero si esta información es filtrada sin contexto, puede traer problemas al centro comercial. Puede valer la pena cambiar los términos para evitarlo. Por ejemplo:
+
+* Cluster 1: Clientes adultos de bajo gasto potencial
+* Cluster 2: Clientes adultos de medio gasto potencial
+* Cluster 3: Clientes jóvenes de medio gasto potencial
+* Cluster 4: Clientes adultos jóvenes de alto gasto potencial
+
+## Acciones de negocio
+
+```{r }
+
+datos$cluster_etiq <- recode(datos$cluster, 
+       '1'='Adultos de bajo gasto potencial',
+       '2'='Adultos de medio gasto potencial',
+       '3'='Jóvenes de medio gasto potencial',
+       '4'='Adultos jóvenes de alto gasto potencial')
+
+ggplot(datos, aes(x=cluster, fill=cluster_etiq)) +
+  geom_bar() +
+  geom_text(aes(label= ..count..), stat='count', vjust=1.3) +
+  labs(x='Cluster', y='Número de personas', fill='Etiqueta') +
+  theme_minimal()
+
+```
+
+Observe que la mayoría de nuestros clientes son de medio gasto potencial. Una primera acción a tomar podría ser hacer una campaña por redes sociales para los clientes adultos jóvenes de alto gasto potencial, de manera que los atraigamos más al centro comercial.
+
+Además podemos usarlos para definir los canales de comunicación adecuados para cada tipo de cliente. Por ejemplo a los más jóvenes por redes sociales e email y para los más adultos por email y canales tradicionales.
+
+**Reflexione:** ¿Para qué otras cosas podría usar estas agrupaciones?
+
+
+

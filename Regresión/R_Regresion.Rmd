@@ -1,0 +1,380 @@
+---
+title: "R: Análisis de correlación y Regresión"
+author: "Cristian Urbano"
+date: ""
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
+
+options(max.print = 100)
+```
+
+# Datos
+
+A lo largo de este script usaremos los datos de mtcars. Esta es una base de datos que contiene 32 distintos modelos de carros, su consumo (millas por galón - mpg) y otras variables que pueden ayudar a explicarlo.
+
+```{r }
+
+library(dplyr)
+library(ggplot2)
+
+#Cargamos los datos
+datos <- mtcars
+
+head(datos,10)
+```
+
+# Análisis de correlación
+
+Usamos la correlación de pearson para ver la correlación lineal entre cada par de variables. Para ello usaremos las funciones ggcorr() y ggpairs() del paquete GGally.
+
+Primero instalamos el paquete
+
+```{r ,eval=FALSE}
+install.packages('GGally') #Recuerde que esto solo se hace una vez
+```
+
+Y cargamos la librería a nuestro espacio de trabajo
+
+```{r }
+library(GGally)
+```
+
+Ya podemos usar la función. Esta solo nos pide poner el data frame. 
+
+
+La manera más simple de hacer este análisisn es usar ggcorr(). Este se limita a mostrar como color la dirección e intensidad de la correlación. Se recomienda usarlo como primer acercamiento a una base de datos. Aquí no importa si hay muchas o pocas variables. A esto se le llama un **correlograma**.
+
+```{r }
+ggcorr(datos, high='forestgreen', low='firebrick')
+```
+
+Como podemos ver, nuestra variable de interés (rendimiento - mpg) está muy correlacionada con el peso (wt). Analicemos más detenidamente estas dos variables. Para ello podemos usar ggpairs(), seleccionando dichas variables.
+
+```{r }
+ggpairs(select(datos, mpg, wt))
+```
+
+Observe que esta función nos da información bastante relevante. En la esquina inferior izquierda nos muestra el diagrama de dispersión de la variable de la columna (y=mpg) y la variable en la fila (x=wt).
+
+En la diagonal nos muestra el diagrama de densidad de las variables (podemos ver si parecen simétricas, normales, etc.)
+
+Y, finalmente, en la esquina superior derecha nos muestra el coeficiente de correlación de pearson ($\rho$) con su respectivo nivel de significancia.
+
+Una estrella ($*$) significa un nivel de significancia del 10%, dos estrellas ($**$) al 5% y tres estrellas ($***$) al 1%. Esto es así por convención, a menos de que se indique lo contrario.
+
+Recuerde que en este caso la prueba de hipótesis corresponde a 
+
+$$H_0 : \rho=0$$
+$$H_A : \rho\neq0$$
+Por lo tanto, si tiene tres estrellas, significa que rechazamos la hipótesis nula de que la correlación es 0 al 99% de confianza. Así, podemos afirmar que el rendimiento del carro está muy fuertemente correlacionado negativamente con su peso. Esto significa que cuando el peso estpa aumentando, el rendimiento está disminuyendo. Cuidado, **esto no significa que el peso causa la bajada en el rendimiento**. Correlación y causalidad son cosas diferentes.
+
+Para referencia, observe los siguientes ejemplos de correlación que no son causalidad:
+
+https://www.buzzfeednews.com/article/kjh2110/the-10-most-bizarre-correlations
+
+Claramente esto va al absurdo, pero a veces la diferencia entre correlación y causalidad no es tan clara.
+
+En general, las correlaciones se pueden interpretar de acuerdo con la siguiente tabla:
+
+| Coeficiente        | Relación     |
+|:------------------:|:------------:|
+| $\rho\leq0.3$      | Débil o nula |
+| $0.3<\rho\leq0.5$  | Moderada     |
+| $0.5<\rho\leq0.75$ | Fuerte       |
+| $0.75<\rho\leq1$   | Muy fuerte   |
+
+Si queremos sacar solamente el coeficiente de correlación podemos usar cor.test() de la siguiente manera
+
+```{r }
+cor.test(datos$mpg, datos$wt, method = "pearson")
+```
+
+La interpretación sería la misma que vimos antes. La diferencia es que con ggpairs() podemos comparar varias variables al mismo tiempo.
+
+# Análisis de regresión
+
+Haremos un modelo del rendimiento del carro en función de su peso. Especificando el modelo, tenemos que
+
+$$mpg = \beta_0 + \beta_{1}wt + \varepsilon$$
+
+## Regresión
+
+Hacer regresiones en R es bastante sencillo. Para hacerlo usamos la función lm(), su nombre proviene de las iniciales de linear model.
+
+La variable dependiente va primero, luego ponemos ~ y a su derecha las variables independientes separadas por un +. En este caso solo tenemos una, así que podemos escribir la función así
+
+```{r }
+lm(mpg ~ wt, data = datos)
+```
+
+Para ver los resultados de mejor manera podemos guardar el modelo en un objeto y hacerle un summary()
+
+```{r }
+modelo <- lm(mpg ~ wt, data = datos)
+
+summary(modelo)
+```
+
+Observe que tiene varias partes.
+
+![](Tabla_regresion.png)
+
+En esta simple tabla podemos analizar una buena parte del ejercicio de regresión.
+
+Este es un modelo en el que la independiente y la dependiente entran tal cual (LIN-LIN) por lo que los betas se interpretarían como
+
+$\beta_0:$ Con un 99% de confianza, si el peso fuera 0, el rendimiento por galón sería 37.28 millas.<br>
+$\beta_{1}:$ Con un 99% de confianza, cuando el peso aumenta un kilo, el rendimiento por galón disminuye 5.34 millas en promedio.
+
+Además, pordemos ver que las variaciones en el peso del carro explican un 75.28% de las variaciones en el rendimiento (R-cuadrado)
+
+Y la relación entre estas dos variables es lineal, pues la prueba F se rechaza con un 99% de confianza.
+
+Recuerde que las hipótesis son
+
+$H_0 : \beta_0=\beta_{1}=0$ <br>
+$H_A :$ Algún beta es distinto de 0.
+
+
+Ahora, no podemos creerle a este modelo al menos que chequeemos los supuestos.
+
+## Supuestos
+
+### Normalidad de los errores
+
+La normalidad de los errores se chequea con ks.test(). ks viene de Kolmogorov-Smirnoff. Esta prueba se hace sobre los residuos.
+
+Las hipótesis son:
+
+$H_0 : \varepsilon$ se distribuye normal.<br>
+$H_A : \varepsilon$ no se distribuye normal.
+
+```{r }
+ks.test(modelo$residuals, 'pnorm')
+```
+Rechazamos la hipótesis nula de normalidad. Podemos concluir que, con un nivel de significacia del 99%, los errores no se distribuyen normal.
+
+Esto nos trae la consecuencia de no poder creerle a los intervalos de confianza de los betas.
+
+### Homoscedasticidad
+
+La homoscedasticidad se chequea con bptest(), del paquete lmtest. bp viene de Breush-Pagan. Esta prueba se hace sobre el objeto que contiene el modelo, pues la función va a buscar los residuos automáticamente.
+
+Las hipótesis son:
+
+$H_0 :$ Los residuos tienen varianza ($\sigma^2$) constante. Es decir, hay homoscedasticidad.<br>
+$H_A :$ Los residuos no tienen varianza constante. Es decir, hay heteroscedasticidad.
+
+Primero instalamos y cargamos el paquete
+
+```{r , eval=FALSE}
+install.packages('lmtest')
+```
+
+```{r }
+library(lmtest)
+```
+
+Y corremos la prueba 
+
+```{r }
+bptest(modelo)
+```
+No rechazamos la hipótesis nula de homoscedasticidad. No hay evidencia suficiente para rechazar la hipótesis nula, por lo que podemos afirmar que los residuos son homoscedasticos.
+
+### No autocorrelación
+
+La no autocorrelación se chequea con dwtest(), del paquete lmtest. bp viene de Durbin-Watson. Esta prueba se hace sobre el objeto que contiene el modelo, pues la función va a buscar los residuos automáticamente.
+
+Las hipótesis son:
+
+$H_0 :$ Los residuos no están autocorrelacionados.<br>
+$H_A :$ Los residuos están autocorrelacionados.
+
+Como ya tenemos cargado el paquete, corremos la prueba 
+
+```{r }
+dwtest(modelo)
+```
+
+No rechazamos la hipótesis nula de no autocorrelación al 1% de significancia. No hay evidencia suficiente para rechazar la hipótesis nula, por lo que podemos afirmar que los residuos no están autocorrelacionados.
+
+La autocorrelación es un problema típico de las series de tiempo. Cuando se presenta en un corte transversal (muchos individuos en un solo momento del tiempo), usualmente se debe a omisión de variables relevantes.
+
+## Predicción
+
+Asumamos que todos los supuestos se cumplieron (más adelante vermos que hacer en caso de que no). Para predecir nuestra y usando nuestro modelo ($\hat{y}$), podemos usar la función predict().
+
+Podemos indicar el nivel de confianza del intervalo usadon el argumento level. Para el 95%, el código sería
+
+```{r }
+predict(modelo, interval = 'confidence', level = 0.95)
+```
+
+Pero es más útil añadirlo a nuestro data frame para poder comparar y hacer un gráfico
+
+```{r }
+#Guarda la predicción en un objeto
+fit <- predict(modelo, interval = 'confidence', level = 0.95)
+
+#Añade la predicción, el upper bound y el lower bound del intervalo de confianza al data frame
+datos_fit <- cbind(datos, fit)
+```
+
+Para hacer el gráfico podemos usar ggplot(). Es importante conservar el orden de las variables (en y debe ir la dependiente y en x la independiente).
+
+```{r }
+ggplot(datos_fit, aes(x=wt, y=mpg)) +
+  geom_point() + #Hace el gráfico de dispersión
+  geom_line(aes(x=wt, y=fit), #Añade la línea de regresión
+            color='firebrick',
+            linetype='dashed') +
+  geom_ribbon(aes(ymax=upr, ymin=lwr), alpha = 0.3) + #Añade el intervalo
+  theme_minimal()
+```
+
+## Solución de problemas
+
+### No normalidad
+
+Cuando los errores no se comportan normal, es necesario hacer pruebas estadísticas no paramétricas (que no requieran el supuesto de normalidad) si las muestras son pequeñas. No paramétrico significa que no asumen una distribución a priori, sino que la construyen a partir de los datos.
+
+Si las muestras son grandes ($n>30$), es posible apelar al Teorema del Límite Central. Aunque es necesario revisar el problema a fondo y chequear que no haya un problema de especificación.
+
+Otra solución es usar modelos de regresión no paramétricos, como la regresión cuantílica.
+
+### Heteroscedasticidad
+
+Cuando hay heteroscedaticidad es posible usar unos errores estándar consistentes en presencia de este problema. Para hacerlo, podemos usar la función coeftest() del paquete lmtest junto a la función vcovHC() del paquete sandwich.
+
+```{r , eval=FALSE}
+install.packages('sandwich')
+```
+
+```{r }
+library(sandwich)
+```
+
+Se usa de esta manera
+
+```{r }
+coeftest(modelo, vcov. = vcovHC(modelo, type = "HC1"))
+```
+
+Los tests de significancia individual ahora serán consistentes aún cuando haya problemas de heteroscedasticidad.
+
+
+### Autocorrelación
+
+Parecido al caso anterior, cuando hay autocorrelación es posible usar unos errores estándar consistentes en presencia de este problema. Para hacerlo, podemos usar la función coeftest() del paquete lmtest junto a la función vcovHC() del paquete sandwich. Pero en lugar de vcovHC usamos vcovHAC
+
+
+```{r }
+coeftest(modelo, vcov. = vcovHAC(modelo))
+```
+
+Los tests de significancia individual ahora serán consistentes aún cuando haya problemas de heteroscedasticidad y/o de autocorrelación. Sin embargo, es importante mencionar que la autocorrelación debería ser un problema en datos de series de tiempo. En la mayoría de los otros casos, suele deberse a mala especificación del modelo.
+
+
+Otras soluciones para la heteroscedasticidad y la autocorrelación son estimar el modelo por mínimos cuadrados generalizados (GLS), o hacer correcciones como la de Newey-West, pero esto no lo cubriremos.
+
+## Selección de variables
+
+Cuando tenemos un data frame con muchas variables, quizá no sepamos exactamente que variables incluir en el modelo. Hay técnicas de minería de datos para solucionar este problema.
+
+La stepwise regression (regresión en pasos) va cambiando las variables del modelo de regresión para ver cuáles aportan información y cuales no. Para medir esto se usan criterios de información, como el AIC y el BIC o el R-cuadrado.
+
+Para realizar este proceso en R se usa la función regsubsets() del paquete leaps
+
+```{r , eval=FALSE}
+install.packages('leaps')
+```
+
+```{r }
+library(leaps)
+```
+
+Le decimos a la función cual es nuestra dependiente, cuales podrían ser las independientes. nvmax le dice hasta máximo cuantas variables queremos.
+
+```{r }
+stepwise_forward <- regsubsets(x= select(datos, -mpg), y=datos$mpg, method = 'forward', 
+            nvmax = 8, intercept = TRUE)
+
+sum_swf <- summary(stepwise_forward)
+
+sum_swf
+
+```
+
+Como puede notar, nos devuelve el mejor modelo para cada número de variables. Podemos ver con cual quedarnos viendo el comportamiento del R-cuadrado (o cualquier otro criterio como el BIC, aunque ese se minimiza).
+
+```{r }
+sum_swf_df <- data.frame('n_variables'= as.character(c(1:8)), 
+                         'R2_ajustado'= sum_swf$adjr2,
+                         'BIC' = sum_swf$bic)
+
+ggplot(sum_swf_df, aes(y = R2_ajustado, x = n_variables, group = 1)) +
+  geom_line() +
+  theme_minimal()
+
+```
+
+Si usamos como criterio el R-cuadrado ajustado, nos quedamos con el modelo con dos variables (más el intercepto), pues las variables adicionales no aportan mucho.
+
+Así, nuestro modelo final es
+
+```{r }
+modelo_final <- lm(mpg ~ wt + cyl, data = datos)
+
+summary(modelo_final)
+```
+Tenga en cuenta que aquí solo mostramos el método forward, también existe el backward y el exhaustivo. El forward empieza con el modelo con el intercepto y va ingresando variables hasta encontrar el mejor para cada tamaño. El backward empieza con el modelo completo y va quitando variables. El exhaustivo prueba todas las combinaciones, pero puede ser demorado el datasets más grandes.
+
+## Presentación de resultados
+
+Finalmente, estamos listos para sacar nuestros resultados y mostrarlos al mundo. Para hacer esto podemos usar la librería stargazer.
+
+```{r , eval=FALSE}
+install.packages('stargazer')
+```
+
+```{r }
+library(stargazer)
+```
+
+Este paquete tiene la posibilidad de generar tablas en R markdown (html), pdf (latex) o texto plano. Tiene una gran cantidad de opciones de personalización. Pero a veces basta con solo usar el siguiente código.
+
+```{r , results='asis'}
+stargazer(modelo_final, type = 'html', star.char = '*')
+```
+
+Si queremos la tabla para Word, podemos sacarla en texto plano y copiarla
+
+```{r }
+stargazer(modelo_final, type = 'text')
+```
+
+```{r }
+library(kableExtra)
+library(xtable)
+
+modelo_final %>% 
+  xtable() %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+
+
+
+
+

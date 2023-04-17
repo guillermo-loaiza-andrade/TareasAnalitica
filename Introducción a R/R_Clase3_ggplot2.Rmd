@@ -1,0 +1,471 @@
+---
+title: "R Clase 3: Introducción a ggplot2"
+author: "Cristian Urbano"
+date: "9/12/2022"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+
+options(max.print = 100)
+```
+
+# Datos
+
+Usemos los datos de gapminder para aplicar las funciones de ggplot2. Ya lo habíamos cargado antes.
+
+```{r }
+library(gapminder)
+data('gapminder')
+gapminder
+
+#Convertiremos el año a character para las visualizaciones
+gapminder$year = as.character(gapminder$year) 
+
+```
+
+# Introducción a ggplot2
+
+## Instalación
+
+Usamos install.packages() para instalar ggplot2
+
+```{r ,eval=FALSE}
+
+install.packages('ggplot2') #Recuerde que esto solo se hace una vez
+
+```
+
+Cargamos la librería a nuestro espacio de trabajo
+
+```{r }
+library(ggplot2)
+```
+
+También cargaremos dplyr para poder transformar datos
+
+```{r }
+library(dplyr)
+```
+
+## Uso
+
+Como vimos en la parte teórica, ggplot funciona en capas. Las esenciales son los datos, los aesthetics (o ejes) y la geometría. Veamos cada uno.
+
+Todo gráfico de ggplot empieza con la función ggplot()
+
+```{r }
+ggplot()
+```
+
+
+Como puede ver, esto genera un cambas gris sin ningún contenido. Este es el espacio en el que se va a generar nuestro gráfico.
+
+Ahora añadamos nuestros datos, van como el primer argumento de la función.
+
+```{r }
+ggplot(gapminder)
+```
+
+Aún no sale nada, esto está bien. Aún no le hemos dicho qué parte de los datos vamos a mostrar. Esto se indica como el segundo argumento de la función, con una función llamada aes()
+
+```{r }
+ggplot(gapminder, aes(x=gdpPercap, y=lifeExp))
+```
+
+
+Aquí ya le indicamos que vamos a tener el PIB per cápita en el eje x y la expectativa de vida en el eje y. ggplot reconoce las variables y dibuja sus rangos en cada eje.
+
+Sin embargo, aún no sabe como representar cada dato. Para ello, añadimos el componente de la geometría al ggplot con un +
+
+```{r }
+ggplot(gapminder, aes(x=gdpPercap, y=lifeExp)) +
+  geom_point()
+```
+
+En este caso, añadí puntos. Cada punto representa la combinación entre el PIB y la expectativa de vida que hay en cada observación del data frame.
+
+Ya añadimos los 3 componentes principales. Tenemos un gráfico completo!
+
+## Componentes adicionales
+
+Este gráfico lo podemos complementar con cambios de estadísticos o estéticos. Veamos como podemos modificarlo.
+
+### Estadísticas
+
+El gráfico que hicimos se llama gráfico de dispersión y pretende ver la relación entre dos variables numéricas. Podemos facilitarle al usuario ver esto usando una línea de tendencia. Recuerde, todas las capas se añaden con un +
+
+```{r }
+ggplot(gapminder, aes(x=gdpPercap, y=lifeExp)) +
+  geom_point() +
+  geom_smooth() #Añadir capa con línea de tendencia
+```
+
+Para generar una línea de tendencia, es necesario que ggplot haga transformaciones estadísticas a nuestros datos, por eso a estas capas se les llama capas estadísticas.
+
+De este se puede decir que hay una relación positiva entre el PIB promedio por persona y la expectativa de vida.
+
+### Facetas
+
+Otro componente que se puede sumar a nuestro gráfico se llama faceta. Las facetas permiten subdividir nuestro gráfico en subgráficos de acuerdo a una variable. 
+
+En nuestro caso, estamos teniendo en cuenta todos los años al mismo tiempo, esto puede resultar confuso para nuestro público. Podemos subdividir el gráfico en años y visualizar mejor usando la función facet_wrap()
+
+```{r }
+ggplot(gapminder, aes(x=gdpPercap, y=lifeExp)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~year)
+
+```
+
+De esta manera podemos ver que si bien la expectativa de vida máxima no ha incrementado mucho, si ha aumentado el PIB per cápita. Pero todavía podemos mejorar más nuestra visualización. 
+
+Un cambio que podemos hacer es dividir el PIB entre 1000 para que no quede tan apiñado.
+
+```{r }
+ggplot(gapminder, aes(x=gdpPercap/1000, y=lifeExp)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~year)
+
+```
+
+### Coordenadas
+
+Las modificaciones a los ejes se pueden hacer con una variedad de funciones. Por ejemplo, lims() pone los límites para eje variable y labs() permite cambiar los nombres que aparece en el gráfico (incluso el título).
+
+```{r }
+ggplot(gapminder, aes(x=gdpPercap/1000, y=lifeExp)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~year) +
+  lims(x = c(0,40)) +
+  labs(x = 'PIB per cápita (en miles)', y = 'Expectativa de vida', 
+       title = 'Relación entre el PIB per cápita y al expectativa de vida por año')
+```
+
+Ya nuestro gráfico se va viendo mejor.
+
+### Temas
+
+El último toque que le falta al gráfico es mejorar la parte estética. Para ello existe la función theme().
+
+Si revisa el documento de ayuda (F1 o help()), se dará cuenta de que permite cambiar cada pequeño detalle del gráfico. Pero esto es abrumador, por lo que existen unos temas predeterminados que podemos probar.
+
+Este es el tema minimal
+
+```{r }
+ggplot(gapminder, aes(x=gdpPercap/1000, y=lifeExp)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~year) +
+  lims(x = c(0,40)) +
+  labs(x = 'PIB per cápita (en miles)', y = 'Expectativa de vida', 
+       title = 'Relación entre el PIB per cápita y al expectativa de vida por año') +
+  theme_minimal()
+```
+
+Y este el tema classic
+
+```{r }
+ggplot(gapminder, aes(x=gdpPercap/1000, y=lifeExp)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~year) +
+  lims(x = c(0,40)) +
+  labs(x = 'PIB per cápita (en miles)', y = 'Expectativa de vida', 
+       title = 'Relación entre el PIB per cápita y al expectativa de vida por año') +
+  theme_classic()
+```
+
+Hay bastantes opciones para dejar el gráfico listo para mostrar.
+
+De esta manera, tenemos un gráfico completo y listo para mostrar en unas cuantas líneas de código.
+
+## Guardar
+
+Para guardar nuestro gráfico usamos la función ggsave(). El proceso es simple, asignamos nuestro gráfico a un objeto y luego lo llamamos como primer argumento e indicamos el nombre del archivo a guardar.
+
+```{r }
+grafico_puntos <- ggplot(gapminder, aes(x=gdpPercap/1000, y=lifeExp)) +
+  geom_point() +
+  geom_smooth() +
+  facet_wrap(~year) +
+  lims(x = c(0,40)) +
+  labs(x = 'PIB per cápita (en miles)', y = 'Expectativa de vida', 
+       title = 'Relación entre el PIB per cápita y al expectativa de vida por año') +
+  theme_minimal()
+
+ggsave(grafico_puntos, file = 'grafico1.png')
+
+```
+
+![](grafico1.png)
+
+Se puede manipular el ancho, alto y la escala del gráfico.
+
+```{r }
+ggsave(grafico_puntos, file = 'grafico1_1.png', width = 5, height = 5, scale = 1.3)
+
+```
+
+## Geometrías más usadas
+
+### geom_bar()
+
+Se usa para hacer gráficos de barras. El argumento stat = 'identity' le dice a ggplot que no modifique los datos. Esto se hace para evitar el comportamiento por defecto del geom_bar(), que es contar observaciones.
+
+Filtraré los países de América en el año 2007 y graficaré la expectativa de vida.
+
+```{r }
+
+df_america_2007 <- gapminder %>% 
+  filter(continent=='Americas' & year=='2007')
+
+grafico_barras <- ggplot(df_america_2007, aes(x=country, y=lifeExp)) +
+  geom_bar(stat = 'identity') +
+  labs(x = 'País', y = 'Expectativa de vida', 
+       title = 'Expectativa de vida de países americanos en el año 2007') +
+  coord_flip() + # Voltear el gráfico
+  theme_minimal()
+
+grafico_barras
+
+```
+
+Si queremos ordenarlo y cambiar el color dentro de las barras (fill), podemos usar el siguiente código
+
+```{r }
+
+df_america_2007 <- gapminder %>% 
+  filter(continent=='Americas' & year=='2007') %>% 
+  arrange(lifeExp) %>%  #Ordenar el data frame con la variable lifeExp
+  mutate(country = factor(country, levels = country)) #Volver country factor para que conserve el orden
+
+grafico_barras <- ggplot(df_america_2007, aes(x=country, y=lifeExp)) +
+  geom_bar(stat = 'identity', fill= 'lightblue') +
+  labs(x = 'País', y = 'Expectativa de vida', 
+       title = 'Expectativa de vida de países americanos en el año 2007') +
+  coord_flip() +
+  theme_minimal()
+
+grafico_barras
+
+```
+
+Se puede usar la función colors() para ver una lista de todos los colores disponibles en R 
+
+```{r }
+colors()
+
+```
+
+Aunque también se puede usar cualquiera si escribe el código hexagesimal (ejemplo: #5f9ea0) puede encontrar más en https://www.color-hex.com/
+
+```{r }
+
+grafico_barras <- ggplot(df_america_2007, aes(x=country, y=lifeExp)) +
+  geom_bar(stat = 'identity', fill= '#5f9ea0') +
+  labs(x = 'País', y = 'Expectativa de vida', 
+       title = 'Expectativa de vida de países americanos en el año 2007') +
+  coord_flip() +
+  theme_minimal()
+
+grafico_barras
+
+```
+
+### geom_line()
+
+Se usa para dibujar gráficos de líneas. Estos usualmente sirven para visualizar series de tiempo.
+
+Por ejemplo, podemos graficar la evolución de la expectativa de vida promedio de los países americanos en el tiempo.
+
+```{r }
+
+df_america_lifeexp <- gapminder %>% 
+  filter(continent=='Americas') %>% 
+  group_by(year) %>% 
+  summarise(media_lifeExp = mean(lifeExp))
+
+grafico_lineas <- ggplot(df_america_lifeexp, aes(x=year, y=media_lifeExp, group=1)) +
+  geom_line() +
+  labs(x = 'Año', y = 'Expectativa de vida promedio', 
+       title = 'Expectativa de vida de países americanos (1952-2007)') +
+  theme_minimal()
+
+grafico_lineas
+
+```
+
+Note que tuvimos que poner el aesthetic group=1 para que ggplot sepa que no hay agrupaciones.
+
+Se puede combinar con geom_point() si se quiere marcar cada año.
+
+```{r }
+
+grafico_lineas_puntos <- ggplot(df_america_lifeexp, aes(x=year, y=media_lifeExp, group=1)) +
+  geom_line() +
+  geom_point() +
+  labs(x = 'Año', y = 'Expectativa de vida promedio', 
+       title = 'Expectativa de vida de países americanos (1952-2007)') +
+  theme_minimal()
+
+grafico_lineas_puntos
+
+```
+
+### geom_text()
+
+Esta geometría sirve para poner 'etiquetas de datos' en el gráfico. Se usa en conjunto con el aesthetic label.
+
+```{r }
+
+grafico_lineas_puntos_texto <- ggplot(df_america_lifeexp, 
+                                      aes(x=year, y=media_lifeExp, group=1, 
+                                          label = round(media_lifeExp,2))) +
+  geom_line() +
+  geom_point() +
+  geom_text() +
+  labs(x = 'Año', y = 'Expectativa de vida promedio', 
+       title = 'Expectativa de vida de países americanos (1952-2007)') +
+  theme_minimal()
+
+grafico_lineas_puntos_texto
+
+```
+
+
+Así no se ve muy bien, podemos moverlo hacia arriba (vjust) y bajarle el tamaño al texto (size).
+
+Valores negativos en vjust mueven el texto hacia arriba y valores positivos hacia abajo.
+
+```{r }
+
+grafico_lineas_puntos_texto <- ggplot(df_america_lifeexp, 
+                                      aes(x=year, y=media_lifeExp, group=1, 
+                                          label = round(media_lifeExp,2))) +
+  geom_line() +
+  geom_point() +
+  geom_text(vjust=-1, size=3) +
+  labs(x = 'Año', y = 'Expectativa de vida promedio', 
+       title = 'Expectativa de vida de países americanos (1952-2007)') +
+  theme_minimal()
+
+grafico_lineas_puntos_texto
+
+```
+
+### geom_boxplot()
+
+Como a veces la media no es suficiente, podemos usar el gráfico de cajas y bigotes para mostrar la mediana, los cuartiles 1 y 3 y hasta los valores atípicos (lo veremos en clase).
+
+Para este gráfico no debemos modificar los datos, pues geom_boxplot() transforma los datos por nosotros. Solo filtraré para el continente americano.
+
+```{r }
+
+df_america <- gapminder %>% 
+  filter(continent=='Americas')
+
+grafico_cajas <- ggplot(df_america, aes(x=year, y=lifeExp)) +
+  geom_boxplot() +
+  labs(x = 'Año', y = 'Expectativa de vida', 
+       title = 'Gráfico de cajas de la expectativa de vida de países americanos (1952-2007)') +
+  theme_minimal()
+
+grafico_cajas
+
+```
+
+Podemos ver la misma tendencia hacia arriba en la mediana, pero adicionalmente estamos observando toda la distribución de los datos.
+
+## Aesthetics (ejes) más usados
+
+Ya hemos visto algunos aesthetics adicionales, como group o label. Pero hacen falta otros importantes.
+
+### color
+
+Este aesthetic se usa para mostrar una variable categórica como color de un gráfico de puntos o de líneas. Así no tenemos que dejar solo el continente americano.
+
+Importante: Para el gráfico de líneas, el group debe tener la misma variable que el color.
+
+
+```{r }
+
+df_continents_lifeexp <- gapminder %>% 
+  group_by(year, continent) %>% 
+  summarise(media_lifeExp = mean(lifeExp))
+
+grafico_lineas_color <- ggplot(df_continents_lifeexp, 
+                                      aes(x=year, y=media_lifeExp,color=continent, group=continent,
+                                          label = round(media_lifeExp,2))) +
+  geom_line() +
+  geom_point() +
+  geom_text(vjust=-1, size=3) +
+  labs(x = 'Año', y = 'Expectativa de vida promedio', color='Continente',
+       title = 'Expectativa de vida por continente (1952-2007)') +
+  theme_minimal()
+
+grafico_lineas_color
+
+```
+
+Este aes no se puede usar para las barras porque pinta el borde solamente. Por ello en ese caso usamos fill.
+
+### fill
+
+```{r }
+
+df_america_1987_2007 <- gapminder %>% 
+  filter(continent=='Americas' & year %in% c('1987','2007')) %>% 
+  arrange(lifeExp) %>%  #Ordenar el data frame con la variable lifeExp
+  mutate(country = factor(country, levels = unique(country))) #Volver country factor para que conserve el orden
+
+grafico_barras_fill <- ggplot(df_america_1987_2007, aes(x=country, y=lifeExp, fill=year)) +
+  geom_bar(stat = 'identity', position = position_dodge2(0.7)) +
+  labs(x = 'País', y = 'Expectativa de vida', fill='Año',
+       title = 'Comparación de expectativa de vida de países americanos entre 1987 y 2007') +
+  coord_flip() +
+  theme_minimal()
+
+grafico_barras_fill
+
+```
+
+#### Modificar los colores
+
+Para modificar los colores se usa scale_fill_manual() o scale_color_manual(), dependiendo de que argumento se haya usado en aes().
+
+El argumento values debe contener un vector con tantos colores como hay en la gráfica.
+
+```{r }
+
+grafico_barras_fill <- ggplot(df_america_1987_2007, aes(x=country, y=lifeExp, fill=year)) +
+  geom_bar(stat = 'identity', position = position_dodge2(0.7)) +
+  labs(x = 'País', y = 'Expectativa de vida', fill='Año',
+       title = 'Comparación de expectativa de vida de países americanos entre 1987 y 2007') +
+  scale_fill_manual(values = c('#6eb7cd', 'lightsalmon1')) +
+  coord_flip() +
+  theme_minimal()
+
+grafico_barras_fill
+
+```
+
+## Recursos ggplot2
+
+En la galería de gráficos de R se pueden encontrar una gran cantidad de visualizaciones con código y ejemplos replicables.
+La dirección web es https://www.r-graph-gallery.com/
+|
+
+
+
+

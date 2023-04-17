@@ -1,0 +1,371 @@
+---
+title: "R: Series de tiempo y pronósticos"
+author: "Cristian Urbano"
+date: ""
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message = FALSE)
+
+options(max.print = 100)
+
+options(scipen = 9999)
+```
+
+# Librerías y Datos
+
+Primero instalamos los paquetes forecast y zoo
+
+```{r ,eval=FALSE}
+install.packages('forecast','zoo') #Recuerde que esto solo se hace una vez
+```
+
+Y cargamos las librerías
+
+```{r }
+library(forecast)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(zoo)
+```
+
+Cargamos los datos del IPC.
+
+```{r }
+#Cargamos los datos
+ipc <- read_excel('IPC.xlsx')
+
+#Declaramos que es una series de tiempo
+data_ts <- ts(ipc$IPC, start = 2005, frequency = 12)
+
+```
+
+Inspección gráfica:
+
+```{r }
+autoplot(data_ts) 
+```
+
+Podemos ver que la serie tiene tendencia positiva.
+
+# Descomposición
+
+Para descomponer la serie de tiempo usamos decompose(). En este caso usaremos la aditiva.
+
+```{r }
+data_ts_dec <- decompose(data_ts, type = 'additive')
+
+autoplot(data_ts_dec)
+```
+
+Observe que el IPC siempre tiende a subir a principios de año y tiende a bajar hasta noviembre. Esto tiene sentido, pues la mayoría de ajustes de precios se dan al principio del año.
+
+# Modelos ARIMA
+
+Los modelos ARIMA(p,d,q) tienen una parte autorregresiva, una parte de media móvil y una parte integrada. Además pueden capturar el comportamiento estacional con otros 3 parámetros (P,D,Q), que buscan tener en cuenta el comportamiento de la parte estacional.
+
+$$ARIMA(p,d,q)(P,D,Q)$$
+
+## Estimación
+
+Para modelar la serie con ARIMA, usamos la función auto.arima(). Dependiendo del criterio de información que usemos podemos tener distintos resultados.
+
+```{r }
+#Con el criterio de Akaike (AIC)
+modela <- auto.arima(data_ts, max.p = 20, max.q=20, ic = "aic")
+modela
+```
+
+Con el AIC nos sugiere un modelo ARIMA(0,1,4)(0,1,2)
+
+```{r }
+#Con el criterio Bayesiano (BIC)
+modelb <- auto.arima(data_ts, max.p = 20, max.q=20, ic = "bic")
+modelb
+```
+
+Con el BIC nos sugiere un modelo ARIMA(1,1,1)(0,1,1)
+
+Podemos continuar el proceso con ambos.
+
+## Pruebas de supuestos
+
+Testeamos la autocorrelación en los modelos sugeridos. La prueba de Ljung-Box tiene las siguientes hipótesis
+
+$H_0:$ No autocorrelación
+
+$H_A:$ Autocorrelación
+
+Modelo A
+
+```{r }
+model <- modela
+
+res <- residuals(model)
+
+m <- matrix(nrow = 10, ncol=3)
+LB <- NULL
+
+for (i in 1:10) {
+  box <- Box.test(res, lag = i, type = "Ljung-Box")
+  m[i, 1] <- box$parameter
+  m[i, 2] <- round(box$statistic, digits = 2)
+  m[i, 3] <- round(box$p.value, digits = 3)
+  
+  LB[i] <- m[i, 3]<0.1
+}
+
+m
+
+```
+
+Modelo B
+
+```{r }
+model <- modelb
+
+res <- residuals(model)
+
+m <- matrix(nrow = 10, ncol=3)
+LB <- NULL
+
+for (i in 1:10) {
+  box <- Box.test(res, lag = i, type = "Ljung-Box")
+  m[i, 1] <- box$parameter
+  m[i, 2] <- round(box$statistic, digits = 2)
+  m[i, 3] <- round(box$p.value, digits = 3)
+  
+  LB[i] <- m[i, 3]<0.1
+}
+
+LBs <- sum(LB)
+m
+
+```
+
+Ambos no tienen problemas de autocorrelación en ninguno de los rezagos. Podemos graficar los resultados:
+
+```{r }
+tsdiag(modela)
+```
+
+Ahora, para testear homoscedasticidad, podemos usar las funciones de autocorrelación de los errores al cuadrado (que corresponden a su varianza)
+
+Modelo A
+
+```{r }
+res <- residuals(modela)
+
+layout(matrix(c(1,2),2,1))
+acf(res^2,main='SACF - residuos cuadrados',xlab='Rezagos')
+pacf(res^2,main='SPACF - residuos cuadrados',xlab='Rezagos')
+```
+
+Modelo B
+
+```{r }
+res <- residuals(modelb)
+
+layout(matrix(c(1,2),2,1))
+acf(res^2,main='SACF - residuos cuadrados',xlab='Rezagos')
+pacf(res^2,main='SPACF - residuos cuadrados',xlab='Rezagos')
+```
+
+Notamos que ambos se comportan bien, la PACF se mantiene dentro de los límites. Por tanto concluímos que no hay problemas de heteroscedasticidad.
+
+## Evaluación
+
+Para decidir que modelo usar debemos evaluar. Para evaluar, primero creamos las funciones para calcular los errores
+
+```{r }
+
+metricas_ts <- function(actual= NULL, fitted = NULL){
+  
+  res <- actual - fitted
+  
+  mse <- mean(res^2)
+  rmse <- sqrt(mse)
+  
+  mae <- mean(abs(res))
+  mape <- mean(abs(res)/actual)
+  
+  metricas <- data.frame('MSE'=mse, 'RMSE'=rmse, 'MAE'=mae, 'MAPE'=mape)
+  
+  return(metricas)
+}
+
+```
+
+Como los datos son mensuales, dejaremos 12 periodos para evaluar (un año entero). Es decir, $H=12$. Guardamos los datos de evaluación reales en un objeto.
+
+```{r }
+H <- 12
+
+reales <- data_ts[(length(data_ts)-H+1):length(data_ts)]
+```
+
+Cabe destacar que no se deben hacer los 3 procesos de evaluación cada vez, debe elegir uno de acuerdo a la situación. Por ejemplo si se está haciendo un modelo de predicción de la demanda para apoyar las tareas de planeación del año siguiente, lo más conveniente es usar ventana fija, pues es el que más se acerca al como se usaría el modelo en la realidad.
+
+Si se requieren los pronósticos más precisos posibles para planear solo el siguiente mes, entonces conviene más evaluar con ventana móvil o recursiva.
+
+### Ventana fija
+
+Para la ventana fija debemos estimar el modelo con los datos hasta $T-H$, luego pronosticar los 12 periodos siguientes y comparar usando las métricas de evaluación.
+
+```{r }
+ventana <- ts(data_ts[1:(length(data_ts)-H)], frequency = 12)
+  
+modeloa_ventanafija <- arima(ventana, order=c(0,1,4), seasonal = c(0,1,2))
+
+forecast_modeloa <- forecast(modeloa_ventanafija, h=12, level = 0.95)
+
+forecast_modeloa_m <- as.numeric(forecast_modeloa$mean)
+
+metricas_ts(actual = reales, fitted = forecast_modeloa_m)
+
+```
+
+```{r }
+#La ventana es la misma para ambos modelos
+
+modelob_ventanafija <- arima(ventana, order=c(1,1,1), seasonal = c(0,1,1))
+
+forecast_modelob <- forecast(modelob_ventanafija, h=12, level = 0.95)
+
+forecast_modelob_m <- as.numeric(forecast_modelob$mean)
+
+metricas_ts(actual = reales, fitted = forecast_modelob_m)
+```
+
+En este caso podríamos usar el MAPE para comparar (recuerde que este no se debe usar si estamos pronosticando variaciones, por ejemplo). Entonces vemos que el modelo A tiene un 0.1% de error, mientras que el modelo B tiene un 0.2%, así que con ventana fija el modelo A sería el elegido.
+
+Podemos visualizar la predicción usando ggplot
+
+```{r }
+
+pronostico <- data.frame('Fecha'=ipc$Fecha[(nrow(ipc)-H+1):nrow(ipc)], #Añadimos las fechas para poder graficar
+                         'mean'= as.numeric(forecast_modeloa$mean),
+           'upper'= as.numeric(forecast_modeloa$upper),
+           'lower'= as.numeric(forecast_modeloa$lower))
+
+ipc_gg <- left_join(ipc, pronostico, by='Fecha')
+
+grafico_vf <- ggplot(ipc_gg, aes(x=Fecha, y=IPC)) +
+  geom_line() +
+  geom_line(aes(y=mean), color='firebrick') +
+  geom_ribbon(aes(ymax=upper, ymin=lower), alpha=0.3, fill='salmon') +
+  theme_minimal()
+
+ggplotly(grafico_vf)
+  
+```
+
+### Ventana móvil
+
+En la ventana móvil, estimamos el modelo con los datos desde 1 hasta T-H pronosticamos un periodo adelante y guardamos el resultado. Luego movemos la ventana desde el dato 2 hasta T-H+1, estimamos el modelos, pronosticamos un periodo adelante y guardamos el resultado. Repetimos este proceso hasta pronosticar los H periodos (en este caso 12).
+
+Para hacer este proceso más fácilmente, usamos un for loop.
+
+```{r }
+
+H <- 12
+
+forecast_modeloa <- data.frame('Fecha'=ipc$Fecha[(nrow(ipc)-H+1):nrow(ipc)],
+                             'mean'=rep(0,H),
+                             'upper'=rep(0,H),
+                             'lower'=rep(0,H))
+
+forecast_modelob <- data.frame('Fecha'=ipc$Fecha[(nrow(ipc)-H+1):nrow(ipc)],
+                             'mean'=rep(0,H),
+                             'upper'=rep(0,H),
+                             'lower'=rep(0,H))
+
+for(h in 0:(H-1)) {
+  
+  i <- h+1 #Usamos esto para indicar la fila en la que guardaremos.
+  
+  ventana <- ts(data_ts[(1+h):(length(data_ts)-H+h)], frequency = 12)
+  
+  modeloa_ventana <- arima(ventana, order=c(0,1,4), seasonal = c(0,1,2)) #Reestimamos el modelo cada vez
+  forecast_modeloa[i,2] <- forecast(modeloa_ventana,h=1)$mean
+  forecast_modeloa[i,3] <- forecast(modeloa_ventana,h=1)$upper
+  forecast_modeloa[i,4] <- forecast(modeloa_ventana,h=1)$lower
+  
+  modelob_ventana <- arima(ventana, order=c(1,1,1), seasonal = c(0,1,1)) #Reestimamos el modelo cada vez
+  forecast_modelob[i,2] <- forecast(modelob_ventana,h=1)$mean
+  forecast_modelob[i,3] <- forecast(modelob_ventana,h=1)$upper
+  forecast_modelob[i,4] <- forecast(modelob_ventana,h=1)$lower
+}
+
+
+metricas_ts(actual = reales, fitted = forecast_modeloa$mean)
+metricas_ts(actual = reales, fitted = forecast_modelob$mean)
+
+```
+
+En este caso, el modelo B tiene menores métricas, por lo que se considera mejor para pronosticar un paso a la vez.
+
+Podemos graficar el resultado
+
+```{r }
+
+ipc_gg <- left_join(ipc, forecast_modelob, by='Fecha')
+
+grafico_vm <- ggplot(ipc_gg, aes(x=Fecha, y=IPC)) +
+  geom_line() +
+  geom_line(aes(y=mean), color='firebrick') +
+  geom_ribbon(aes(ymax=upper, ymin=lower), alpha=0.3, fill='salmon') +
+  theme_minimal()
+
+ggplotly(grafico_vm)
+  
+```
+
+Note que lo intervalo de este tipo de pronóstico es mucho más pequeño que el de ventana fija, esto sucede porque las predicciones van volviéndose más inciertas conforme pasa el tiempo, como en este caso estamos simulando que pronosticamos solo un paso adelante cada mes, el intervalo se mantiene pequeño.
+
+### Ventana recursiva
+
+Tarea. Programe la comparación de estos dos modelos con ventana recursiva, decida cuál es el mejor y grafique.
+
+
+## Pronóstico
+
+Como pudo ver, tenemos un modelo que es mejor para predecir un paso a la vez (el B) y un modelo que es mejor para predecir los 12 pasos al mismo tiempo (el A). La elección dependerá del tipo de aplicación para la que usará.
+
+De cualquier manera, conseguimos muy buenos modelos.
+
+En este caso, supongamos que estamos estimando el IPC para saber como se comportará la inflación el próximo año, con el fin de ajustar los precios de nuestros productos en enero. Así, usaríamos el modelo A.
+
+Para hacer el pronóstico incluímos tanto los datos de entrenamiento como los de test en la muestra para el modelo elegido y pronosticamos hacia el futuro.
+
+```{r }
+
+modelo_elegido <- arima(data_ts, order=c(0,1,4), seasonal = c(0,1,2)) #Reestimamos el modelo con todos los datos
+
+forecast_elegido <- forecast(modelo_elegido, h=12, level = 0.95) #Pronosticamos 12 periodos hacia el futuro
+
+pronostico <- data.frame('Fecha'= as.Date(time(forecast_elegido$mean)), #Añadimos las fechas para poder graficar
+                         'mean'= as.numeric(forecast_elegido$mean),
+           'upper'= as.numeric(forecast_elegido$upper),
+           'lower'= as.numeric(forecast_elegido$lower))
+
+ipc_gg <- full_join(ipc, pronostico, by='Fecha')
+
+grafico_vf <- ggplot(ipc_gg, aes(x=Fecha, y=IPC)) +
+  geom_line() +
+  geom_line(aes(y=mean), color='firebrick') +
+  geom_ribbon(aes(ymax=upper, ymin=lower), alpha=0.3, fill='salmon') +
+  theme_minimal()
+
+ggplotly(grafico_vf)
+  
+```
