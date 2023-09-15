@@ -23,6 +23,7 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
 ```
 
 # Introducción a R
+En esta clase se introducen conceptos básicos en el mundo de R como la asignación de variables, operaciones aritméticas, tipos de variables y de objetos, la carga de archivos terminados en .R, entre otros temas que serán relevantes para que el estudiante inicie satisfactoriamente con su jornada en el mundo R
 
 ## Asignación
 Se usa el símbolo <- para asignar contenido a un objeto. 
